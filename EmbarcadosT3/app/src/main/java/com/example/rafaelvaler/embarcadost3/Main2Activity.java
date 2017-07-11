@@ -22,6 +22,10 @@ import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
 
 public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     private MediaRecorder recorder;
@@ -39,6 +43,12 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     SimpleDateFormat simpleDateFormat;
     String timeStamp;
 
+    private long UPDATE_INTERVAL = 10000; // in Milliseconds
+    private long DELAY_INTERVAL = 10000; // in Milliseconds
+    private MyTimerTask myTask;
+
+    private int recorderIndex = 0;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -47,8 +57,15 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         setContentView(R.layout.activity_main2);
+
+
         initComs();
         actionListener();
+
+        // onCreate is being called twice (dont know why), this prevents from starting two timers
+        if (savedInstanceState != null) {
+            startService();
+        }
     }
 
     private void initComs() {
@@ -71,10 +88,10 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
                 * (long) stat.getAvailableBlocks();
         return bytesAvailable / (1024.f * 1024.f);
     }
-
-
-
     private void actionListener() {
+
+        // TODO: merge two videos
+
         btnStop.setOnClickListener(new View.OnClickListener() {
 
             @Override
@@ -92,6 +109,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
                     recording = false;
                     // Let's prepareRecorder so we can record again
                     prepareRecorder();
+                    recording = true;
+                    recorder.start();
                 }
 
             }
@@ -110,22 +129,9 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
         recorder.setProfile(camcorderProfile);
 
-//        if (camcorderProfile.fileFormat == MediaRecorder.OutputFormat.MPEG_4) {
-//            recorder.setOutputFile("/sdcard/XYZApp/" + "XYZAppVideo" + ""
-//                    + new SimpleDateFormat("ddMMyyyyHHmmss").format(new Date())
-//                    + ".mp4");
-//        } else if (camcorderProfile.fileFormat == MediaRecorder.OutputFormat.MPEG_4) {
-//            recorder.setOutputFile("/sdcard/XYZApp/" + "XYZAppVideo" + ""
-//                    + new SimpleDateFormat("ddMMyyyyHHmmss").format(new Date())
-//                    + ".mp4");
-//        } else {
-//            recorder.setOutputFile("/sdcard/XYZApp/" + "XYZAppVideo" + ""
-//                    + new SimpleDateFormat("ddMMyyyyHHmmss").format(new Date())
-//                    + ".mp4");
-//        }
-
-        File output = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "temp1");
-        recorder.setOutputFile(output.getAbsolutePath());
+        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "embarcadosApp");
+        File output = new File(mediaStorageDir.getPath() + "video_temp_" + recorderIndex + ".mp4");
+        recorder.setOutputFile(output.getPath());
 
         try {
             recorder.prepare();
@@ -152,7 +158,6 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
                 e.printStackTrace();
             }
         }
-
     }
 
     public void surfaceChanged(SurfaceHolder holder, int format, int width,
@@ -202,4 +207,34 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
         }
         finish();
     }
+
+    private void startService() { // prevent to two threads execute at same time
+
+        if(myTask != null)
+            return;
+
+        myTask = new MyTimerTask();
+        Timer myTimer = new Timer();
+
+        myTimer.schedule(myTask, DELAY_INTERVAL, UPDATE_INTERVAL);
+    }
+
+    private class MyTimerTask extends TimerTask {
+
+        @Override
+        public void run() {
+            recorderIndex = (recorderIndex == 0) ? 1 : 0;
+            recorder.stop();
+
+            try {
+                camera.reconnect();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            prepareRecorder();
+            recorder.start();
+        }
+    }
 }
+
