@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
+import android.media.MediaScannerConnection;
 import android.os.Environment;
 import android.os.StatFs;
 import android.support.v7.app.AppCompatActivity;
@@ -105,7 +106,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     private void initComs() {
         simpleDateFormat = new SimpleDateFormat("ddMMyyyyhhmmss");
         timeStamp = simpleDateFormat.format(new Date());
-        camcorderProfile = CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH);
+        camcorderProfile = CamcorderProfile.get(CamcorderProfile.QUALITY_720P);
         surfaceView = (SurfaceView) findViewById(R.id.preview);
         surfaceHolder = surfaceView.getHolder();
         surfaceHolder.addCallback(this);
@@ -149,7 +150,13 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 //                }
 
                 recording = false;
-                recorder.stop();
+                try{
+                    recorder.stop();
+                }catch(RuntimeException stopException){
+                    //handle cleanup here
+                }
+                //camera.lock();
+
                 String teste = mergeVideos_2();
                 Log.w("teste", teste);
 //                try {
@@ -165,15 +172,42 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     private ArrayList<String> video_urls = null;
 
     private String mergeVideos_2() {
+        Movie mp4_1 = null;
+        Movie mp4_2 = null;
+        Movie[] inMovies;
+
+        // create "T3Embarcados" folder to put merged video and make it visible in Pictures folder
+        File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES), "T3Embarcados");
+
+        // Create the storage directory if it does not exist
+        if (! mediaStorageDir.exists()){
+            if (! mediaStorageDir.mkdirs()){
+                Log.d("T3Embarcados", "failed to create directory");
+                return null;
+            }
+        }
+        // fix
+        mediaStorageDir.setExecutable(true);
+        mediaStorageDir.setReadable(true);
+        mediaStorageDir.setWritable(true);
+
         try {
-            String mp4_1 = videoOnePath;
-            String mp4_2 = videoTwoPath;
+            // check if mp4 files exists
+            File fileVerification = new File(videoOnePath);
+            if (fileVerification.exists()) {
+                mp4_1 = MovieCreator.build(videoOnePath);
+            }
+            fileVerification =  new File(videoTwoPath);
+            if (fileVerification.exists()) {
+                mp4_2 = MovieCreator.build(videoTwoPath);
+            }
 
-            Movie[] inMovies = new Movie[]{
-                    MovieCreator.build(mp4_1),
-                    MovieCreator.build(mp4_2)
-            };
-
+            if(mp4_1 != null && mp4_2 != null) {
+                inMovies = new Movie[]{mp4_1, mp4_2};
+            }else {
+                inMovies = new Movie[]{mp4_1};
+            }
             List<Track> videoTracks = new LinkedList<Track>();
             List<Track> audioTracks = new LinkedList<Track>();
             for (Movie m : inMovies) {
@@ -200,17 +234,15 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
             final Container container = new DefaultMp4Builder().build(result);
 
-            FileChannel fc = new RandomAccessFile(String.format(Environment.getExternalStorageDirectory().getAbsolutePath()+"/output.mp4"), "rw").getChannel();
+            FileChannel fc = new RandomAccessFile(String.format(mediaStorageDir.getPath()+"/output.mp4"), "rw").getChannel();
+
+            // initiate media scan and put the new things into the path array to
+            // make the scanner aware of the location and the files you want to see
+            MediaScannerConnection.scanFile(this, new String[] {mediaStorageDir.toString(), mediaStorageDir.toString()+"/output.mp4"}, null, null);
+
             container.writeContainer(fc);
             fc.close();
 
-//            BasicContainer out = (BasicContainer) new DefaultMp4Builder()
-//                    .build(result);
-//
-//            @SuppressWarnings("resource")
-//            FileChannel fc = new RandomAccessFile(String.format(Environment.getExternalStorageDirectory() + "/wishbyvideo.mp4"), "rw").getChannel();
-//            out.writeContainer(fc);
-//            fc.close();
         } catch (FileNotFoundException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
