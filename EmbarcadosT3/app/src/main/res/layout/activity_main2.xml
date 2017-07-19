@@ -12,7 +12,7 @@
 
     <Button
         android:id="@+id/btn_stop"
-        android:text="Stop Recording"
+        android:text="Start Monitoring"
         android:layout_width="match_parent"
         android:layout_height="50dp"
         />

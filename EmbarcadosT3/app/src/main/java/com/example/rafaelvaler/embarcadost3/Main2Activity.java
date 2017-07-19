@@ -1,12 +1,15 @@
 package com.example.rafaelvaler.embarcadost3;
 
 import android.app.Activity;
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.pm.ActivityInfo;
 
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
+import android.os.AsyncTask;
 import android.os.Environment;
 import android.os.StatFs;
 import android.support.v7.app.AppCompatActivity;
@@ -79,6 +82,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     private long DELAY_INTERVAL = 10000; // in Milliseconds
     private MyTimerTask myTask;
 
+    private ProgressDialog mProgressDialog;
+
     private int recorderIndex = 0;
 
     @Override
@@ -96,10 +101,14 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
         videoOnePath = mediaStorageDir.getPath() + "video_temp_" + 0 + ".mp4";
         videoTwoPath = mediaStorageDir.getPath() + "video_temp_" + 1 + ".mp4";
+        
+    }
 
-        // onCreate is being called twice (dont know why), this prevents from starting two timers
-        if (savedInstanceState != null) {
-            startService();
+    private void updateRecordingButton() {
+        if(recording) {
+            btnStop.setText("Save Moment");
+        } else {
+            btnStop.setText("Start Monitoring");
         }
     }
 
@@ -132,39 +141,47 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
             @Override
             public void onClick(View v) {
-//                if (recording) {
-//                    recorder.stop();
-//                    if (usecamera) {
-//                        try {
-//                            camera.reconnect();
-//                        } catch (IOException e) {
-//                            e.printStackTrace();
-//                        }
-//                    }
-//                    // recorder.release();
-//                    recording = false;
-//                    // Let's prepareRecorder so we can record again
-//                    prepareRecorder();
-//                    recording = true;
-//                    recorder.start();
-//                }
 
-                recording = false;
-                try{
-                    recorder.stop();
-                }catch(RuntimeException stopException){
-                    //handle cleanup here
+                final Context context = v.getContext();
+
+                if(recording == true) {
+
+                    new AsyncTask<Void, Void, Void>() {
+
+                        @Override
+                        protected void onPreExecute() {
+                            super.onPreExecute();
+                            mProgressDialog = ProgressDialog.show(context, "Saving Video", "");
+                            mProgressDialog.setCanceledOnTouchOutside(false);
+                        }
+
+                        @Override
+                        protected Void doInBackground( Void... params ) {
+                            recording = false;
+                            try{
+                                recorder.stop();
+                            }catch(RuntimeException stopException){
+                                //handle cleanup here
+                            }
+                            String teste = mergeVideos_2();
+                            return null;
+                        }
+
+                        @Override
+                        protected void onPostExecute( Void result ) {
+                            if (mProgressDialog != null) {
+                                mProgressDialog.dismiss();
+                            }
+                            updateRecordingButton();
+                        }
+                    }.execute();
+
+                } else {
+                    recording = true;
+                    recorder.start();
+                    startService();
+                    updateRecordingButton();
                 }
-                //camera.lock();
-
-                String teste = mergeVideos_2();
-                Log.w("teste", teste);
-//                try {
-//                    mergeVideos();
-//                } catch (IOException e){
-//                    System.out.print(e);
-//                }
-
             }
         });
     }
@@ -172,6 +189,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     private ArrayList<String> video_urls = null;
 
     private String mergeVideos_2() {
+
         Movie mp4_1 = null;
         Movie mp4_2 = null;
         Movie[] inMovies;
@@ -253,6 +271,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
         String mFileName = Environment.getExternalStorageDirectory()
                 .getAbsolutePath();
         mFileName += "/output_test.mp4";
+
+
 
         return mFileName;
     }
@@ -359,10 +379,10 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
             prepareRecorder();
 
-            if (!recording) {
-                recording = true;
-                recorder.start();
-            }
+//            if (!recording) {
+//                recording = true;
+//                recorder.start();
+//            }
         }
     }
 
