@@ -246,6 +246,13 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
         mediaStorageDir.setReadable(true);
         mediaStorageDir.setWritable(true);
 
+        // invert order (first the oldest video)
+        if (recorderIndex > 1 && recorderIndex % 2 == 0){
+            String aux = videoOnePath;
+            videoOnePath = videoTwoPath;
+            videoTwoPath = aux;
+        }
+
         try {
             // check if mp4 files exists
             File fileVerification = new File(videoOnePath);
@@ -257,7 +264,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
                 mp4_2 = MovieCreator.build(videoTwoPath);
             }
 
-            if(mp4_1 != null && mp4_2 != null) {
+            if(mp4_1 != null && mp4_2 != null && recorderIndex > 0) { // for now is verifying if it was recorded more than 1 video, should DELETE temporary videos after merge
                 inMovies = new Movie[]{mp4_1, mp4_2};
             }else {
                 inMovies = new Movie[]{mp4_1};
@@ -356,7 +363,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
 
         recorder.setProfile(camcorderProfile);
 
-        String filePath = mediaStorageDir.getPath() + "video_temp_" + recorderIndex + ".mp4";
+        String filePath = mediaStorageDir.getPath() + "video_temp_" + recorderIndex % 2 + ".mp4";
         File output = new File(filePath);
 
         recorder.setOutputFile(output.getPath());
@@ -452,7 +459,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
         @Override
         public void run() {
             if (recording) {
-                recorderIndex = (recorderIndex == 0) ? 1 : 0;
+                recorderIndex = recorderIndex + 1;
                 recorder.stop();
 
                 try {
