@@ -292,7 +292,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
 
             // initiate media scan and put the new things into the path array to
             // make the scanner aware of the location and the files you want to see
-            MediaScannerConnection.scanFile(this, new String[] {mediaStorageDir.toString(), mediaStorageDir.toString()+"/output.mp4"}, null, null);
+            MediaScannerConnection.scanFile(this, new String[] {mediaStorageDir.toString(), mediaStorageDir.toString()+"/output_"+timeStamp+".mp4"}, null, null);
 
             container.writeContainer(fc);
             fc.close();
