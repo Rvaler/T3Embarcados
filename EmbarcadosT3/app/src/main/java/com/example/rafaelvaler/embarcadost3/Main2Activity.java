@@ -6,6 +6,10 @@ import android.content.Context;
 import android.content.pm.ActivityInfo;
 
 import android.hardware.Camera;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
@@ -57,8 +61,9 @@ import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 
 import static android.R.attr.path;
+import static android.R.attr.subtitleTextAppearance;
 
-public class Main2Activity extends Activity implements SurfaceHolder.Callback {
+public class Main2Activity extends Activity implements SurfaceHolder.Callback, SensorEventListener {
     private MediaRecorder recorder;
     private SurfaceHolder surfaceHolder;
     private CamcorderProfile camcorderProfile;
@@ -66,6 +71,14 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
     boolean recording = false;
     boolean usecamera = true;
     boolean previewRunning = false;
+
+    // accelerometer variables
+    private SensorManager senSensorManager;
+    private Sensor senAccelerometer;
+    private long lastUpdate = 0;
+    private float last_x, last_y, last_z;
+    private static final int SHAKE_THRESHOLD = 600;
+
     SurfaceView surfaceView;
     Button btnStart, btnStop;
     File root;
@@ -101,6 +114,10 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
         videoOnePath = mediaStorageDir.getPath() + "video_temp_" + 0 + ".mp4";
         videoTwoPath = mediaStorageDir.getPath() + "video_temp_" + 1 + ".mp4";
+
+        senSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        senAccelerometer = senSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        senSensorManager.registerListener(this, senAccelerometer , SensorManager.SENSOR_DELAY_NORMAL);
         
     }
 
@@ -252,7 +269,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
 
             final Container container = new DefaultMp4Builder().build(result);
 
-            FileChannel fc = new RandomAccessFile(String.format(mediaStorageDir.getPath()+"/output.mp4"), "rw").getChannel();
+            FileChannel fc = new RandomAccessFile(String.format(mediaStorageDir.getPath()+"/output_"+timeStamp+".mp4"), "rw").getChannel();
 
             // initiate media scan and put the new things into the path array to
             // make the scanner aware of the location and the files you want to see
@@ -409,6 +426,50 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback {
         Timer myTimer = new Timer();
 
         myTimer.schedule(myTask, DELAY_INTERVAL, UPDATE_INTERVAL);
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        Sensor mySensor = sensorEvent.sensor;
+
+        if (mySensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            float x = sensorEvent.values[0];
+            float y = sensorEvent.values[1];
+            float z = sensorEvent.values[2];
+
+            long curTime = System.currentTimeMillis();
+
+            if ((curTime - lastUpdate) > 100) {
+                long diffTime = (curTime - lastUpdate);
+                lastUpdate = curTime;
+
+                float speed = Math.abs(x + y + z - last_x - last_y - last_z)/ diffTime * 10000;
+
+                if (speed > SHAKE_THRESHOLD) {
+                    if(recording)
+                        btnStop.callOnClick();
+                }
+
+                last_x = x;
+                last_y = y;
+                last_z = z;
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
+
+    protected void onPause() {
+        super.onPause();
+        senSensorManager.unregisterListener(this);
+    }
+
+    protected void onResume() {
+        super.onResume();
+        senSensorManager.registerListener(this, senAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     private class MyTimerTask extends TimerTask {
