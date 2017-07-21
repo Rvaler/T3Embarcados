@@ -10,6 +10,8 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.media.MediaScannerConnection;
@@ -79,6 +81,14 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
     private float last_x, last_y, last_z;
     private static final int SHAKE_THRESHOLD = 600;
 
+    // sound level variables
+    private static final int sampleRate = 8000;
+    private AudioRecord audio;
+    private int bufferSize;
+    private double lastLevel = 0;
+    private Thread soundThread;
+    private static final int SAMPLE_DELAY = 75;
+
     SurfaceView surfaceView;
     Button btnStart, btnStop;
     File root;
@@ -115,10 +125,19 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
         videoOnePath = mediaStorageDir.getPath() + "video_temp_" + 0 + ".mp4";
         videoTwoPath = mediaStorageDir.getPath() + "video_temp_" + 1 + ".mp4";
 
+        // accelerator assignments
         senSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         senAccelerometer = senSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         senSensorManager.registerListener(this, senAccelerometer , SensorManager.SENSOR_DELAY_NORMAL);
-        
+
+        // sound assignments
+        try {
+            bufferSize = AudioRecord
+                    .getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT);
+        } catch (Exception e) {
+            android.util.Log.e("TrackingFlow", "Exception", e);
+        }
     }
 
     private void updateRecordingButton() {
@@ -428,6 +447,26 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
         myTimer.schedule(myTask, DELAY_INTERVAL, UPDATE_INTERVAL);
     }
 
+    private class MyTimerTask extends TimerTask {
+
+        @Override
+        public void run() {
+            if (recording) {
+                recorderIndex = (recorderIndex == 0) ? 1 : 0;
+                recorder.stop();
+
+                try {
+                    camera.reconnect();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                prepareRecorder();
+                recorder.start();
+            }
+        }
+    }
+
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
         Sensor mySensor = sensorEvent.sensor;
@@ -446,6 +485,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
                 float speed = Math.abs(x + y + z - last_x - last_y - last_z)/ diffTime * 10000;
 
                 if (speed > SHAKE_THRESHOLD) {
+                    System.out.println("shake mooov");
                     if(recording)
                         btnStop.callOnClick();
                 }
@@ -465,30 +505,81 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
     protected void onPause() {
         super.onPause();
         senSensorManager.unregisterListener(this);
+
+        soundThread.interrupt();
+        soundThread = null;
+        try {
+            if (audio != null) {
+                audio.stop();
+                audio.release();
+                audio = null;
+            }
+        } catch (Exception e) {e.printStackTrace();}
     }
 
     protected void onResume() {
         super.onResume();
         senSensorManager.registerListener(this, senAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+
+        audio = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+
+        audio.startRecording();
+        soundThread = new Thread(new Runnable() {
+            public void run() {
+                while(soundThread != null && !soundThread.isInterrupted()){
+                    //thread sleep for a the approximate sampling time
+                    try{
+                        Thread.sleep(SAMPLE_DELAY);
+                    }catch(InterruptedException ie){
+                        ie.printStackTrace();
+                    }
+                    //After this call we can get the last value assigned to the lastLevel variable
+                    readAudioBuffer();
+
+                    runOnUiThread(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            // TODO: ajustar nivel de acordo com transito real
+                            if(lastLevel > 270){
+                                System.out.println("level >270");
+                                if(recording)
+                                    btnStop.callOnClick();
+                            }
+                        }
+                    });
+                }
+            }
+        });
+        soundThread.start();
+
     }
 
-    private class MyTimerTask extends TimerTask {
+    /**
+     * Functionality that gets the sound level out of the sample
+     */
+    private void readAudioBuffer() {
 
-        @Override
-        public void run() {
-            if (recording) {
-                recorderIndex = (recorderIndex == 0) ? 1 : 0;
-                recorder.stop();
+        try {
+            short[] buffer = new short[bufferSize];
 
-                try {
-                    camera.reconnect();
-                } catch (IOException e) {
-                    e.printStackTrace();
+            int bufferReadResult = 1;
+
+            if (audio != null) {
+
+                // Sense the voice...
+                bufferReadResult = audio.read(buffer, 0, bufferSize);
+                double sumLevel = 0;
+                for (int i = 0; i < bufferReadResult; i++) {
+                    sumLevel += buffer[i];
                 }
-
-                prepareRecorder();
-                recorder.start();
+                lastLevel = Math.abs((sumLevel / bufferReadResult));
             }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }
