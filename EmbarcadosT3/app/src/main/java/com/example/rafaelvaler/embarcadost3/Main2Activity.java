@@ -89,6 +89,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
     private Thread soundThread;
     private static final int SAMPLE_DELAY = 75;
 
+    private boolean firstTime = true;
+
     SurfaceView surfaceView;
     Button btnStart, btnStop;
     File root;
@@ -101,8 +103,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
     String videoTwoPath;
     File mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "embarcadosApp");
 
-    private long UPDATE_INTERVAL = 10000; // in Milliseconds
-    private long DELAY_INTERVAL = 10000; // in Milliseconds
+    private long UPDATE_INTERVAL = 15000; // in Milliseconds
+    private long DELAY_INTERVAL = 15000; // in Milliseconds
     private MyTimerTask myTask;
 
     private ProgressDialog mProgressDialog;
@@ -187,6 +189,8 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
                         @Override
                         protected void onPreExecute() {
                             super.onPreExecute();
+                            myTask.cancel();
+                            myTask = null;
                             mProgressDialog = ProgressDialog.show(context, "Saving Video", "");
                             mProgressDialog.setCanceledOnTouchOutside(false);
                         }
@@ -200,6 +204,7 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
                                 //handle cleanup here
                             }
                             String teste = mergeVideos_2();
+
                             return null;
                         }
 
@@ -214,7 +219,24 @@ public class Main2Activity extends Activity implements SurfaceHolder.Callback, S
 
                 } else {
                     recording = true;
-                    recorder.start();
+                    if(firstTime) {
+                        recorder.start();
+                        firstTime = false;
+                    } else {
+                        timeStamp = simpleDateFormat.format(new Date());
+
+                        try {
+                            camera.reconnect();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        recorderIndex = 0;
+                        prepareRecorder();
+                        recorder.start();
+
+                    }
+
+
                     startService();
                     updateRecordingButton();
                 }
